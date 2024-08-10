@@ -17,17 +17,7 @@ export class ProductListComponent {
   errorMessage = '';
   private productService = inject(ProductService);
 
-  products$ = this.productService
-  .products$
-  .pipe(
-    tap(() => {
-      console.log('in component pipeline!');
-    }),
-    catchError((err) => {
-      this.errorMessage = err;
-      return EMPTY;
-    })
-  );
+  products = this.productService.products
 
   // Selected product id to highlight the entry
   selectedProductId$ = this.productService.productSelected$;

@@ -1,5 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { inject, Injectable } from '@angular/core';
+import { computed, inject, Injectable } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   BehaviorSubject,
   catchError,
@@ -33,10 +34,9 @@ export class ProductService {
   );
   readonly productSelected$ = this.productSelectedSubject.asObservable();
 
-  readonly product1$ = this.productSelected$
-  .pipe(
+  readonly product$ = this.productSelected$.pipe(
     filter(Boolean),
-    switchMap(id => {
+    switchMap((id) => {
       return this.http.get<Product>(`${this.productsUrl}/${id}`).pipe(
         switchMap((product) => this.getProductWithReviews(product)),
         catchError((err) => this.handleError(err))
@@ -44,21 +44,27 @@ export class ProductService {
     })
   );
 
-  readonly products$ = this.http.get<Product[]>(this.productsUrl).pipe(
+  private productsResult$ = this.http.get<Product[]>(this.productsUrl).pipe(
+    map((p) => ({ data: p } as Result<Product[]>)),
     tap((res) => console.log('in http get message!')),
     shareReplay(1),
-    catchError((err) => this.handleError(err))
+    catchError((err) =>
+      of({ data: [], error: this.errorService.formatError(err) } as Result<Product[]>)
+    )
   );
+  private productResult= toSignal( this.productsResult$, { initialValue: {data:[]} as Result<Product[]>})
 
-  product$ = combineLatest([this.productSelected$,this.products$])
-  .pipe(
-    map(([productSelected, products]) =>
-      products.find(p => p.id === productSelected)
-    ),
-    filter(Boolean),
-    switchMap(product => this.getProductWithReviews(product)),
-    catchError((err) => this.handleError(err))
-  )
+  products = computed(()=>this.productResult().data)
+  productsError = computed(()=>this.productResult().error)
+
+  // product1$ = combineLatest([this.productSelected$, this.products]).pipe(
+  //   map(([productSelected, products]) =>
+  //     products.find((p) => p.id === productSelected)
+  //   ),
+  //   filter(Boolean),
+  //   switchMap((product) => this.getProductWithReviews(product)),
+  //   catchError((err) => this.handleError(err))
+  // );
   productSelected(selectedProductId: number): void {
     this.productSelectedSubject.next(selectedProductId);
   }
@@ -77,4 +83,9 @@ export class ProductService {
     const formattedMessage = this.errorService.formatError(err);
     return throwError(formattedMessage);
   }
+}
+
+export interface Result<T> {
+  data: T | undefined,
+  error?: string
 }
